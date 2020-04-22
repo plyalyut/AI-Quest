@@ -74,17 +74,16 @@ if __name__ == "__main__":
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
 
     # These are all the sentence types that could happen. Feel free to add more if necessary!
-    SPECIAL_TOKENS = {'prompt': '<|prompt|>', 'response': '<|response|>', 'action': '<|action|>', 'emote': '<|emote|>'}
-    tokenizer.add_special_tokens(SPECIAL_TOKENS)
+    # SPECIAL_TOKENS = {'prompt': '<|prompt|>', 'response': '<|response|>', 'action': '<|action|>', 'emote': '<|emote|>'}
+    # tokenizer.add_special_tokens(SPECIAL_TOKENS)
 
     # Initialized the pre-trained GPT-2 model and optimizer
     model = GPT2LMHeadModel.from_pretrained('gpt2').to(DEVICE)
 
 
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
-
-    train_loader, test_loader, vocab = preprocess((args.train_file, args.test_file), tokenizer, hyper_params['batch_size']) # TODO: feel free to change this up
-    model_embeddings = model.resize_token_embeddings(len(vocab))
+    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size']) # TODO: feel free to change this up
+    model_embeddings = model.resize_token_embeddings(vocab_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 
     if args.load:
