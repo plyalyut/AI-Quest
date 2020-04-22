@@ -71,7 +71,7 @@ if __name__ == "__main__":
     experiment.log_parameters(hyper_params)
 
     # Load the GPT2 Tokenizer, add any special token if needed
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2', eos_token='<EOS>', pad_token='<PAD>')
 
     # These are all the sentence types that could happen. Feel free to add more if necessary!
     # SPECIAL_TOKENS = {'prompt': '<|prompt|>', 'response': '<|response|>', 'action': '<|action|>', 'emote': '<|emote|>'}
@@ -82,7 +82,8 @@ if __name__ == "__main__":
 
 
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
-    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size']) # TODO: feel free to change this up
+    # Need toggle for seen and unseen test dataset
+    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], False) # TODO: feel free to change this up
     model_embeddings = model.resize_token_embeddings(vocab_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 

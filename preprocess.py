@@ -4,15 +4,22 @@ from torch.utils.data import DataLoader, random_split, ConcatDataset, Dataset, S
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-def load_dataset(files, tokenizer, batch_size):
-    total_dataset = LightDataset(files[0], files[1], tokenizer)
-    train_indices = list(range(0, total_dataset.num_training_examples))
-    test_indices = list(range(total_dataset.num_training_examples, len(total_dataset)))
-    train_dataset = Subset(total_dataset, train_indices)
-    test_dataset = Subset(total_dataset, test_indices)
+def load_dataset(files, tokenizer, batch_size, unseen_data):
+    if unseen_data:
+        total_dataset = LightDataset(files[0], files[1], tokenizer)
+        train_indices = list(range(0, total_dataset.num_training_examples))
+        test_indices = list(range(total_dataset.num_training_examples, len(total_dataset)))
+        train_dataset = Subset(total_dataset, train_indices)
+        test_dataset = Subset(total_dataset, test_indices)
+    else:
+        total_dataset = LightDataset(files[0], None, tokenizer)
+        split_size = int(len(total_dataset) * 0.9)
+        train_dataset, test_dataset = random_split(total_dataset, [split_size, len(total_dataset) - split_size])
+    
     train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
     return train_loader, test_loader, total_dataset.vocab_size
+
 
 class LightDataset(Dataset):
     def __init__(self, train_file, test_file, tokenizer):
@@ -22,17 +29,18 @@ class LightDataset(Dataset):
         self.y = []
         self.lengths = []
         
-        self.convert_file(train_file)
-        self.num_train_examples = len(self.lengths)
-        self.convert_file(test_file)
+        self.convert_file(train_file, tokenizer)
+        if test_file != None:
+            self.num_train_examples = len(self.lengths)
+            self.convert_file(test_file, tokenizer)
         self.vocab_size = len(tokenizer)
                     
         self.seq = pad_sequence(self.seq, batch_first=True, padding_value=tokenizer.pad_token_id)
         self.y = pad_sequence(self.y, batch_first=True, padding_value=tokenizer.pad_token_id)
 
-    def convert_file(self, file_name):
+    def convert_file(self, file_name, tokenizer):
         with open(file_name, 'rb') as fp:
-            data = pickle.load(f)
+            data = pickle.load(fp)
             for episode in data:
                 num_responses = len(episode['character'])
                 for i in range(1, num_responses):
