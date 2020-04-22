@@ -12,10 +12,43 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 hyper_params = {
      "batch_size": 50,
-     "num_epochs": 1,
-     "learning_rate": 0.01,
-     "window_size": 40,
+     "num_epochs": 3,
+     "learning_rate": 0.001
  }
+
+def train_model(model, train_loader, optimizer, experiment):
+    """
+    Trains the model.
+    :param model: the initilized model to use for forward and backward pass
+    :param train_loader: Dataloader of training data
+    :param optimizer: the initilized optimizer
+    :param experiment: comet.ml experiment object
+    """
+    # TODO: Write the training loop here, save trained model weights if needed
+    model = model.train()
+    with experiment.train():
+        for i in range(hyper_params['num_epochs']):
+            for input, length in tqdm(train_loader):
+                input = input.long().to(DEVICE)
+                optimizer.zero_grad()
+                loss = model(input, labels = input)[0]
+                loss.backward()  # calculate gradients
+                optimizer.step()  # update model weights
+
+def test_model(model, test_loader, experiment):
+    """
+    Tests the model using the testing dataset, evaluates the perplexity.
+    :param model: the initilized model to use for forward pass
+    :param loader: Dataloader of test data
+    :param optimizer: the initilized optimizer
+    :param experiment: comet.ml experiment object
+    """
+
+    pass
+
+def interactive():
+    '''TODO'''
+    pass 
 
 
 if __name__ == "__main__":
@@ -50,8 +83,8 @@ if __name__ == "__main__":
 
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
 
-    train_loader, test_loader, vocab_sz = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], hyper_params['window_size'])
-    model_embeddings = model.resize_token_embeddings(vocab_sz)
+    train_loader, test_loader, vocab = preprocess((args.train_file, args.test_file), tokenizer, hyper_params['batch_size']) # TODO: feel free to change this up
+    model_embeddings = model.resize_token_embeddings(len(vocab))
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 
     if args.load:
