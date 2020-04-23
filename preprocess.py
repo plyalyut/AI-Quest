@@ -4,15 +4,15 @@ from torch.utils.data import DataLoader, random_split, ConcatDataset, Dataset, S
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-def load_dataset(files, tokenizer, batch_size, unseen_data):
+def load_dataset(files, tokenizer, batch_size, seq_len, unseen_data):
     if unseen_data:
-        total_dataset = LightDataset(files[0], files[1], tokenizer)
+        total_dataset = LightDataset(files[0], files[1], tokenizer, seq_len)
         train_indices = list(range(0, total_dataset.num_training_examples))
         test_indices = list(range(total_dataset.num_training_examples, len(total_dataset)))
         train_dataset = Subset(total_dataset, train_indices)
         test_dataset = Subset(total_dataset, test_indices)
     else:
-        total_dataset = LightDataset(files[0], None, tokenizer)
+        total_dataset = LightDataset(files[0], None, tokenizer, seq_len)
         split_size = int(len(total_dataset) * 0.9)
         train_dataset, test_dataset = random_split(total_dataset, [split_size, len(total_dataset) - split_size])
     
@@ -22,12 +22,13 @@ def load_dataset(files, tokenizer, batch_size, unseen_data):
 
 
 class LightDataset(Dataset):
-    def __init__(self, train_file, test_file, tokenizer):
+    def __init__(self, train_file, test_file, tokenizer, seq_len):
         self.tokenizer = tokenizer
 
         self.seq = []
-        self.y = []
         self.lengths = []
+        self.masks = []
+        self.max_seq_len = seq_len
         
         self.convert_file(train_file, tokenizer)
         if test_file != None:
@@ -36,7 +37,6 @@ class LightDataset(Dataset):
         self.vocab_size = len(tokenizer)
                     
         self.seq = pad_sequence(self.seq, batch_first=True, padding_value=tokenizer.pad_token_id)
-        self.y = pad_sequence(self.y, batch_first=True, padding_value=tokenizer.pad_token_id)
 
     def convert_file(self, file_name, tokenizer):
         with open(file_name, 'rb') as fp:
@@ -57,25 +57,31 @@ class LightDataset(Dataset):
                     tokenizer.add_tokens([first_persona, second_persona + ">"])
                     exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + ">")] + second_persona_speech + [tokenizer.eos_token_id]
                     total_tokens = len(exchange)
-                    self.seq.append(torch.tensor(exchange[0 : total_tokens - 1]))
-                    self.y.append(torch.tensor(exchange[1 : total_tokens]))
-                    self.lengths.append(total_tokens - 1)
+                    self.seq.append(torch.tensor(exchange))
+                    self.lengths.append(total_tokens)
+                    ones = torch.ones(total_tokens)
+                    zeros = torch.zeros(self.max_seq_len - total_tokens)
+                    self.masks.append(torch.cat((ones, zeros)))
 
                     if second_persona_action is not None:
                         tokenizer.add_tokens(second_persona + "_action>")
                         exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + "_action>")] + tokenizer.convert_tokens_to_ids(second_persona_action.split()) + [tokenizer.eos_token_id]
                         total_tokens = len(exchange)
-                        self.seq.append(torch.tensor(exchange[0 : total_tokens - 1]))
-                        self.seq.append(torch.tensor(exchange[1 : total_tokens]))
-                        self.lengths.append(total_tokens - 1)
+                        self.seq.append(torch.tensor(exchange))
+                        self.lengths.append(total_tokens)
+                        ones = torch.ones(total_tokens)
+                        zeros = torch.zeros(self.max_seq_len - total_tokens)
+                        self.masks.append(torch.cat((ones, zeros)))
 
                     if second_persona_emote is not None:
                         tokenizer.add_tokens(second_persona + "_emote>")
                         exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + "_emote>")] + tokenizer.convert_tokens_to_ids(second_persona_emote.split()) + [tokenizer.eos_token_id]
                         total_tokens = len(exchange)
-                        self.seq.append(torch.tensor(exchange[0 : total_tokens - 1]))
-                        self.seq.append(torch.tensor(exchange[1 : total_tokens]))
-                        self.lengths.append(total_tokens - 1)
+                        self.seq.append(torch.tensor(exchange))
+                        self.lengths.append(total_tokens)
+                        ones = torch.ones(total_tokens)
+                        zeros = torch.zeros(self.max_seq_len - total_tokens)
+                        self.masks.append(torch.cat((ones, zeros)))
 
     def __len__(self):
         """

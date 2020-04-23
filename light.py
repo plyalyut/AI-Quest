@@ -11,9 +11,10 @@ from tqdm import tqdm
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 hyper_params = {
-     "batch_size": 50,
+     "batch_size": 12,
      "num_epochs": 3,
-     "learning_rate": 0.001
+     "learning_rate": 0.001, 
+     'seq_len': 215
  }
 
 def train_model(model, train_loader, optimizer, experiment):
@@ -31,10 +32,12 @@ def train_model(model, train_loader, optimizer, experiment):
             for data in tqdm(train_loader):
                 input = data['seq'].long().to(DEVICE)
                 lengths = data['lengths'].long().to(DEVICE)
+                masks = data['mask'].to(DEVICE)
                 optimizer.zero_grad()
-                loss = model(input, labels = input)[0]
+                loss = model(input, labels = input, attention_mask=masks)[0]
                 loss.backward()  # calculate gradients
                 optimizer.step()  # update model weights
+
 
 def test_model(model, test_loader, experiment):
     """
@@ -84,7 +87,7 @@ if __name__ == "__main__":
 
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
     # Need toggle for seen and unseen test dataset
-    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], False) # TODO: feel free to change this up
+    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], hyper_params['seq_len'], False) 
     model_embeddings = model.resize_token_embeddings(vocab_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 
