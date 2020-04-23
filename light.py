@@ -28,8 +28,9 @@ def train_model(model, train_loader, optimizer, experiment):
     model = model.train()
     with experiment.train():
         for i in range(hyper_params['num_epochs']):
-            for input, length in tqdm(train_loader):
-                input = input.long().to(DEVICE)
+            for data in tqdm(train_loader):
+                input = data['seq'].long().to(DEVICE)
+                lengths = data['lengths'].long().to(DEVICE)
                 optimizer.zero_grad()
                 loss = model(input, labels = input)[0]
                 loss.backward()  # calculate gradients
