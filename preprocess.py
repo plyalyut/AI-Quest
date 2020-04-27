@@ -30,58 +30,102 @@ class LightDataset(Dataset):
         self.masks = []
         self.max_seq_len = seq_len
         
-        self.convert_file(train_file, tokenizer)
+        self.convert_file(train_file)
         if test_file != None:
             self.num_train_examples = len(self.lengths)
-            self.convert_file(test_file, tokenizer)
+            self.convert_file(test_file)
         self.vocab_size = len(tokenizer)
                     
         self.seq = pad_sequence(self.seq, batch_first=True, padding_value=tokenizer.pad_token_id)
 
-    def convert_file(self, file_name, tokenizer):
+    def convert_episode_context_to_data_point(self, episode):
+        # Gets context for the entire scene
+        data_point = ['<|setting_name|>'] + (episode['setting']['name'] + ", " + episode['setting']['category']).split()
+        data_point += ['<|setting_desc|>'] + (episode['setting']['description']).split()
+        data_point += ['<|partner_name|>'] + (episode['agents'][1]['name']).split()
+        data_point += ['<|self_name|>'] + (episode['agents'][0]['name']).split()
+        data_point += ['<|partner_persona|>'] + (episode['agents'][1]['persona']).split()
+        data_point += ['<|self_persona|>'] + (episode['agents'][0]['persona']).split()
+        partner = episode['agents'][1]['name']
+        self_character = episode['agents'][0]['name']
+        return data_point, partner, self_character
+
+    def get_previous_utterances(self, episode, response_num, partner):
+        # builds speech over conversation
+        res = []
+        if episode['character'][response_num] == partner:
+            res += ['<|partner_say|>'] + episode['speech'][response_num].split()
+            if episode['action'][response_num] is not None:
+                res += ['<|partner_act|>'] + episode['action'][response_num].split()
+            if episode['emote'][response_num] is not None:
+                res += ['<|partner_emote|>'] + episode['emote'][response_num].split()
+        else:
+            res += ['<|self_say|>'] + episode['speech'][response_num].split()
+            if episode['action'][response_num] is not None:
+                res += ['<|self_act|>'] + episode['action'][response_num].split()
+            if episode['emote'][response_num] is not None:
+                res += ['<|self_emote|>'] + episode['emote'][response_num].split()
+        return res
+
+
+    def convert_file(self, file_name):
         with open(file_name, 'rb') as fp:
             data = pickle.load(fp)
             for episode in data:
+                context, partner, self_character = self.convert_episode_context_to_data_point(episode)
                 num_responses = len(episode['character'])
+                previous_text = []
                 for i in range(1, num_responses):
-                    # we may need a separate dictionary for personas, actions, and emotes
-                    # sorry if the added tokens are messy, we can modify them later as we go
-                    first_persona = "<" + episode['character'][i - 1] + ">"
-                    second_persona = "<" + episode['character'][i]
-                    second_persona_action = episode['action'][i]
-                    second_persona_emote = episode['emote'][i]
 
-                    first_persona_speech = tokenizer.convert_tokens_to_ids(episode['speech'][i - 1].split())
-                    second_persona_speech = tokenizer.convert_tokens_to_ids(episode['speech'][i].split())
+                    # objects for current call and response
+                    current_input = list(context)
+                    for obj in episode['room_objects'][i]:
+                        current_input += ['<|object_desc|>'] + (obj + " : " + episode['all_descriptions'][obj]).split()
+                    
+                    # previous text in conversation
+                    previous_text += self.get_previous_utterances(episode, i - 1, partner)
+                    current_input += previous_text
 
-                    tokenizer.add_tokens([first_persona, second_persona + ">"])
-                    exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + ">")] + second_persona_speech + [tokenizer.eos_token_id]
-                    total_tokens = len(exchange)
-                    self.seq.append(torch.tensor(exchange))
+
+                    speech_input = current_input + ['<|task_speech|>'] + episode['speech'][i].split()
+                    if i == num_responses - 1:
+                        self.tokenizer.add_tokens(speech_input)
+                    total_tokens = len(speech_input)
+                    self.seq.append(torch.tensor(self.tokenizer.convert_tokens_to_ids(speech_input)))
                     self.lengths.append(total_tokens)
+                    # Check masking once window size is found
                     ones = torch.ones(total_tokens)
                     zeros = torch.zeros(self.max_seq_len - total_tokens)
                     self.masks.append(torch.cat((ones, zeros)))
 
+
+                    second_persona_action = episode['action'][i]
+                    second_persona_emote = episode['emote'][i]
                     if second_persona_action is not None:
-                        tokenizer.add_tokens(second_persona + "_action>")
-                        exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + "_action>")] + tokenizer.convert_tokens_to_ids(second_persona_action.split()) + [tokenizer.eos_token_id]
-                        total_tokens = len(exchange)
-                        self.seq.append(torch.tensor(exchange))
+                        action_input = current_input + ['<|task_action|>'] + second_persona_action.split()
+                        self.tokenizer.add_tokens(second_persona_action.split())
+                        total_tokens = len(action_input)
+                        self.seq.append(torch.tensor(self.tokenizer.convert_tokens_to_ids(action_input)))
                         self.lengths.append(total_tokens)
+                        self.tokenizer.add_tokens(action_input)
+                        # Check masking once window size is found
                         ones = torch.ones(total_tokens)
                         zeros = torch.zeros(self.max_seq_len - total_tokens)
                         self.masks.append(torch.cat((ones, zeros)))
 
                     if second_persona_emote is not None:
-                        tokenizer.add_tokens(second_persona + "_emote>")
-                        exchange = [tokenizer.convert_tokens_to_ids(first_persona)] + first_persona_speech + [tokenizer.convert_tokens_to_ids(second_persona + "_emote>")] + tokenizer.convert_tokens_to_ids(second_persona_emote.split()) + [tokenizer.eos_token_id]
-                        total_tokens = len(exchange)
-                        self.seq.append(torch.tensor(exchange))
+                        emote_input = current_input + ['<|task_emote|>'] + second_persona_emote.split()
+                        self.tokenizer.add_tokens(second_persona_emote.split())
+                        total_tokens = len(emote_input)
+                        self.seq.append(torch.tensor(self.tokenizer.convert_tokens_to_ids(emote_input)))
                         self.lengths.append(total_tokens)
+                        self.tokenizer.add_tokens(emote_input)
+                        # Check masking once window size is found
                         ones = torch.ones(total_tokens)
                         zeros = torch.zeros(self.max_seq_len - total_tokens)
                         self.masks.append(torch.cat((ones, zeros)))
+                    
+
 
     def __len__(self):
         """

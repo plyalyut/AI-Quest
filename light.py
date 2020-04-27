@@ -14,7 +14,7 @@ hyper_params = {
      "batch_size": 12,
      "num_epochs": 3,
      "learning_rate": 0.001, 
-     'seq_len': 215
+     'seq_len': 1201
  }
 
 def train_model(model, train_loader, optimizer, experiment):
@@ -78,8 +78,8 @@ if __name__ == "__main__":
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2', eos_token='<EOS>', pad_token='<PAD>')
 
     # These are all the sentence types that could happen. Feel free to add more if necessary!
-    # SPECIAL_TOKENS = {'prompt': '<|prompt|>', 'response': '<|response|>', 'action': '<|action|>', 'emote': '<|emote|>'}
-    # tokenizer.add_special_tokens(SPECIAL_TOKENS)
+    SPECIAL_TOKENS = ['<|task_speech|>', '<|task_action|>', '<|task_emote|>', '<|setting_name|>', '<|setting_desc|>', '<|partner_name|>', '<|self_name|>', '<|partner_persona|>', '<self_persona>', '<|object_desc|>', '<|partner_say|>', '<|partner_act|>', '<|partner_emote|>', '<|self_say|>', '<|self_act|>', '<|self_emote|>']
+    tokenizer.add_tokens(SPECIAL_TOKENS)
 
     # Initialized the pre-trained GPT-2 model and optimizer
     model = GPT2LMHeadModel.from_pretrained('gpt2').to(DEVICE)
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
     # Need toggle for seen and unseen test dataset
     train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], hyper_params['seq_len'], False) 
-    model_embeddings = model.resize_token_embeddings(vocab_size)
+    model_embeddings = model.resize_token_embeddings(vocab_size + 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 
     if args.load:
