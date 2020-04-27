@@ -87,7 +87,7 @@ if __name__ == "__main__":
 
     # Load the train, test DataLoader NOTE: Parse the data using GPT2 tokenizer
     # Need toggle for seen and unseen test dataset
-    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], hyper_params['seq_len'], False) 
+    train_loader, test_loader, vocab_size = load_dataset((args.train_file, args.test_file), tokenizer, hyper_params['batch_size'], hyper_params['seq_len'], False, SPECIAL_TOKENS) 
     model_embeddings = model.resize_token_embeddings(vocab_size + 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 
