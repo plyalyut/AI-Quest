@@ -13,7 +13,7 @@ def load_dataset(files, tokenizer, batch_size, seq_len, unseen_data, special_tok
         train_dataset = Subset(total_dataset, train_indices)
         test_dataset = Subset(total_dataset, test_indices)
     else:
-        total_dataset = LightDataset(files[0], None, seq_len, special_tokens))
+        total_dataset = LightDataset(files[0], None, seq_len, special_tokens)
         split_size = int(len(total_dataset) * 0.9)
         train_dataset, test_dataset = random_split(total_dataset, [split_size, len(total_dataset) - split_size])
     
