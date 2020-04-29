@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, random_split, ConcatDataset, Dataset, S
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import random
+import numpy as np
 
 
 def load_dataset(train_file, test_file, batch_size, seq_len, special_tokens, tokenizer, model_type):
@@ -16,8 +17,8 @@ def load_dataset(train_file, test_file, batch_size, seq_len, special_tokens, tok
 
     # Builds data loaders
     if test_file != None:
-        train_indices = list(range(0, total_dataset.num_training_examples))
-        test_indices = list(range(total_dataset.num_training_examples, len(total_dataset)))
+        train_indices = list(range(0, total_dataset.num_train_examples))
+        test_indices = list(range(total_dataset.num_train_examples, len(total_dataset)))
         train_dataset = Subset(total_dataset, train_indices)
         test_dataset = Subset(total_dataset, test_indices)
     else:
@@ -62,9 +63,22 @@ def get_previous_utterances(episode, response_num, partner):
     return res
 
 
+def random_sample(data, p=0.1):
+    '''
+    Samples randomly from a list like object.
+    :param data: list representing data
+    :param p: float in the range [0,1] representing percentage to select
+    '''
+
+    assert 0 <= p <= 1
+    num_datapoints = len(data)
+    indices = list(np.random.choice(num_datapoints, int(p*num_datapoints)))
+    data = [data[i] for i in indices]
+    return data
+
 # For GPT2 LM
 class GPTDataset(Dataset):
-    def __init__(self, train_file, test_file, tokenizer, seq_len):
+    def __init__(self, train_file, test_file, tokenizer, seq_len, history = 3):
         
         self.tokenizer = tokenizer
         self.max_seq_len = seq_len
@@ -81,6 +95,10 @@ class GPTDataset(Dataset):
     def convert_file(self, file_name):
         with open(file_name, 'rb') as fp:
             data = pickle.load(fp)
+
+            # Random sample from dataset
+            data = random_sample(data)
+
             for episode in data:
                 context, partner, self_character = convert_episode_context_to_data_point(episode)
                 num_responses = len(episode['character'])
@@ -166,6 +184,8 @@ class BertDataset(Dataset):
     def convert_file(self, file_name):
         with open(file_name, 'rb') as fp:
             data = pickle.load(fp)
+            data = random_sample(data)
+
             for episode in data:
                 context, partner, self_character = convert_episode_context_to_data_point(episode)
                 num_responses = len(episode['character'])
