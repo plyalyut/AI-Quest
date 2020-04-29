@@ -19,7 +19,7 @@ class BertBiranker(nn.Module):
         self.embedding_layer = nn.Linear(hidden_size*seq_length, hidden_size)
 
 
-    def forward(self, context, input):
+    def forward(self, context, input, context_mask, input_mask, labels=None):
         '''
         Computes the distance between the norm between the embeddings.
         The context embedding and the input embeddings.
@@ -28,6 +28,7 @@ class BertBiranker(nn.Module):
         :return: loss, embeddings
         '''
 
+        # TODO: incorporate masks in each forward pass
         context = self.bert_model(context)[0]
         context = context.view(context.shape[0],-1)
         context_embedding = self.embedding_layer(context)
@@ -36,9 +37,12 @@ class BertBiranker(nn.Module):
         input = input.view(input.shape[0],-1)
         input_embedding = self.embedding_layer(input)
 
-        loss = torch.norm(context_embedding-input_embedding, p=2, dim=1)
+        # Softmax and dot product?
+        similarity = torch.norm(context_embedding-input_embedding, p=2, dim=1)
 
-        return loss, (context_embedding, input_embedding)
+        # TODO: Use a ranking loss to be maximized on random labels and minimized on correct labels
+
+        return similarity, (context_embedding, input_embedding)
 
 
 
