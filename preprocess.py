@@ -78,10 +78,21 @@ def random_sample(data, p=0.1):
 
 # For GPT2 LM
 class GPTDataset(Dataset):
-    def __init__(self, train_file, test_file, tokenizer, seq_len, history = 3):
+    def __init__(self, train_file, test_file, tokenizer, seq_len, n_history = 3, p = 0.1):
+        """
+        Creates the dataset for use with GPT.
+        :param train_file: filepath of the train file
+        ;param test_file: filepath of the test file
+        :param tokenizer: pretrained tokenizer
+        :param seq_len: max sequence length
+        :param n_history: number of utterances before the current conversation to save
+        :param p: percentage of the dataset to randomly sample
+        """
         
         self.tokenizer = tokenizer
         self.max_seq_len = seq_len
+        self.n_history = n_history
+        self.p = p
 
         self.seq = []
         self.lengths = []
@@ -97,12 +108,12 @@ class GPTDataset(Dataset):
             data = pickle.load(fp)
 
             # Random sample from dataset
-            data = random_sample(data)
+            data = random_sample(data, self.p)
 
             for episode in data:
                 context, partner, self_character = convert_episode_context_to_data_point(episode)
                 num_responses = len(episode['character'])
-                previous_text = ''
+                previous_text = []
                 for i in range(1, num_responses):
 
                     # objects for current call and response
@@ -111,8 +122,8 @@ class GPTDataset(Dataset):
                         current_input += '<|object_desc|> ' + obj + " : " + episode['all_descriptions'][obj]
 
                     # previous text in conversation
-                    previous_text += get_previous_utterances(episode, i - 1, partner)
-                    current_input += previous_text
+                    previous_text += [get_previous_utterances(episode, i - 1, partner)]
+                    current_input += ' '.join(previous_text[max(0, len(previous_text)-self.n_history):])
 
                     speech_input = current_input + ' <|task_speech|> ' + episode['speech'][i]
                     total_tokens = len(speech_input)
@@ -165,8 +176,19 @@ def get_random_label(data, task):
     
 # Used for Bert Biranker
 class BertDataset(Dataset):
-    def __init__(self, train_file, test_file, tokenizer, seq_len):
+    def __init__(self, train_file, test_file, tokenizer, seq_len, n_history = 3, p=0.1):
+        """
+        Creates the dataset for use with GPT.
+        :param train_file: filepath of the train file
+        :param test_file: filepath of the test file
+        :param tokenizer: pretrained tokenizer
+        :param seq_len: max sequence length
+        :param n_history: number of utterances before the current conversation to save
+        :param p: percentage of the dataset to randomly sample
+        """
         self.tokenizer = tokenizer
+        self.n_history = n_history
+        self.p = p
 
         self.context = []
         self.input = []
@@ -184,19 +206,21 @@ class BertDataset(Dataset):
     def convert_file(self, file_name):
         with open(file_name, 'rb') as fp:
             data = pickle.load(fp)
+
+            # Randomly samples from the dataset
             data = random_sample(data)
 
             for episode in data:
                 context, partner, self_character = convert_episode_context_to_data_point(episode)
                 num_responses = len(episode['character'])
-                previous_text = ''
+                previous_text = []
                 for i in range(1, num_responses):
                     current_input = context
                     for obj in episode['room_objects'][i]:
                         current_input += '<|object_desc|> ' + obj + " : " + episode['all_descriptions'][obj]
 
-                    previous_text += get_previous_utterances(episode, i - 1, partner)
-                    current_input += previous_text
+                    previous_text += [get_previous_utterances(episode, i - 1, partner)]
+                    current_input += ' '.join(previous_text[max(0, len(previous_text)-self.n_history):])
 
                     encoded = self.tokenizer.encode_plus('<|task_speech|> ' + current_input, max_length=self.max_seq_len, pad_to_max_length=True)
                     self.context.append(torch.tensor(encoded['input_ids']))
