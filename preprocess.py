@@ -233,14 +233,14 @@ class BertDataset(Dataset):
                         encoded = self.tokenizer.encode_plus(correct_utterance, max_length=self.max_seq_len, pad_to_max_length=True)
                         self.input.append(torch.tensor(encoded['input_ids']))
                         self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                        self.labels.append(0)
+                        self.labels.append(1)
                     else:
                         # Random incorrect speech
                         random_utterance = get_random_label(data, 'speech')
                         encoded = self.tokenizer.encode_plus(random_utterance, max_length=self.max_seq_len, pad_to_max_length=True)
                         self.input.append(torch.tensor(encoded['input_ids']))
                         self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                        self.labels.append(1)
+                        self.labels.append(-1)
                     
 
                     second_persona_action = episode['action'][i]
@@ -254,14 +254,14 @@ class BertDataset(Dataset):
                             encoded = self.tokenizer.encode_plus(second_persona_action, max_length=self.max_seq_len, pad_to_max_length=True)
                             self.input.append(torch.tensor(encoded['input_ids']))
                             self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                            self.labels.append(0)
+                            self.labels.append(1)
                         else:
                             # Incorrect random action
                             random_action = get_random_label(data, 'action')
                             encoded = self.tokenizer.encode_plus(random_action, max_length=self.max_seq_len, pad_to_max_length=True)
                             self.input.append(torch.tensor(encoded['input_ids']))
                             self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                            self.labels.append(1)
+                            self.labels.append(-1)
 
                         
                     second_persona_emote = episode['emote'][i]
@@ -275,14 +275,14 @@ class BertDataset(Dataset):
                             encoded = self.tokenizer.encode_plus(second_persona_emote, max_length=self.max_seq_len, pad_to_max_length=True)
                             self.input.append(torch.tensor(encoded['input_ids']))
                             self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                            self.labels.append(0)
+                            self.labels.append(1)
                         else:
                             # Incorrect random action
                             random_emote = get_random_label(data, 'emote')
                             encoded = self.tokenizer.encode_plus(random_emote, max_length=self.max_seq_len, pad_to_max_length=True)
                             self.input.append(torch.tensor(encoded['input_ids']))
                             self.input_masks.append(torch.tensor(encoded['attention_mask']))
-                            self.labels.append(1)
+                            self.labels.append(-1)
 
     def __len__(self):
         return len(self.labels)

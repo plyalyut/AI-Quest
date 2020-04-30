@@ -9,13 +9,14 @@ from preprocess import *
 from tqdm import tqdm
 from BertBiranker import BertBiranker
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cpu")
 
 hyper_params = {
      "batch_size": 2,
      "num_epochs": 3,
      "learning_rate": 0.001, 
-     'seq_len': 1201
+     'seq_len': 512 #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround
  }
 
 def train_model(model, train_loader, optimizer, experiment, model_type):
@@ -38,8 +39,13 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     masks = data['mask'].to(DEVICE)
                     loss = model(input, labels = input, attention_mask=masks)[0]
                 elif model_type == "bert":
-                    loss = 0
-                    # TODO: backprop for bert
+                    context = data['context'].to(DEVICE)
+                    context_mask = data['context_mask'].to(DEVICE)
+                    input_text = data['input'].to(DEVICE)
+                    input_mask = data['input_mask'].to(DEVICE)
+                    labels = data['label'].to(DEVICE)
+                    loss, (context_embedding, input_embedding) = model(context, input_text, context_mask, input_mask, labels=labels)
+
                 loss.backward()  # calculate gradients
                 optimizer.step()  # update model weights
 
@@ -117,7 +123,9 @@ if __name__ == "__main__":
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased',  pad_token='<PAD>', sep_token='<SEP>')
         # Initialized the pre-trained BERT model
         pretrained_model = BertModel.from_pretrained('bert-base-uncased').to(DEVICE)
-        pretrained_model_embeddings = pretrained_model.resize_token_embeddings(len(tokenizer))
+
+        # Initializing a model from the bert-base-uncased style configuration
+        pretrained_model_embeddings = pretrained_model.resize_token_embeddings(len(tokenizer) + len(SPECIAL_TOKENS))
         model = BertBiranker(pretrained_model, seq_length=hyper_params['seq_len']).to(DEVICE)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
@@ -126,16 +134,14 @@ if __name__ == "__main__":
         print("loading saved model...")
         model.load_state_dict(torch.load('./model.pt'))
     if args.train:
-        # run train loop here
         print("running training loop...")
         train_model(model, train_loader, optimizer, experiment, args.model)
     if args.save:
         print("saving model...")
         torch.save(model.state_dict(), './model.pt')
-    # if args.test:
-    #     # run test loop here
-    #     print("running testing loop...")
-    #     test_model(model, test_loader, experiment)
+    if args.test:
+        print("running testing loop...")
+        test_model(model, test_loader, experiment)
 
 
     if args.interactive:
