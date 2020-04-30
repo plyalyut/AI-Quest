@@ -4,16 +4,17 @@ import torch.nn
 import argparse
 import math
 import numpy as np
+from torch import nn
 from transformers import *
 from preprocess import *
 from tqdm import tqdm
 from BertBiranker import BertBiranker
+from CrossRanker import CrossRanker
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#DEVICE = torch.device("cpu")
 
 hyper_params = {
-     "batch_size": 2,
+     "batch_size": 5,
      "num_epochs": 3,
      "learning_rate": 0.001, 
      'seq_len': 512 #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround
@@ -29,6 +30,8 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
     """
     # TODO: Write the training loop here, save trained model weights if needed
     model = model.train()
+    if model_type == "cross":
+        loss_func = nn.MSELoss(reduction='sum')
     with experiment.train():
         for i in range(hyper_params['num_epochs']):
             for data in tqdm(train_loader):
@@ -45,7 +48,12 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     input_mask = data['input_mask'].to(DEVICE)
                     labels = data['label'].to(DEVICE)
                     loss, (context_embedding, input_embedding) = model(context, input_text, context_mask, input_mask, labels=labels)
-
+                elif model_type == "cross":
+                    input = data['seq'].long().to(DEVICE)
+                    masks = data['mask'].long().to(DEVICE)
+                    labels = data['label'].to(DEVICE)
+                    prediction = model(input, masks)
+                    loss = loss_func(prediction.float(), labels.float())
                 loss.backward()  # calculate gradients
                 optimizer.step()  # update model weights
 
@@ -91,7 +99,7 @@ if __name__ == "__main__":
     if args.model == "gpt2":
         # Load the GPT2 Tokenizer, add any special token if needed
         tokenizer = GPT2Tokenizer.from_pretrained('gpt2', pad_token='<PAD>')
-    elif args.model == "bert":
+    elif args.model == "bert" or args.model == "cross":
         # Load the Bert Tokenizer, add any special token if needed
         tokenizer = BertTokenizer.from_pretrained('bert-base-uncased',  pad_token='<PAD>', sep_token='<SEP>')
 
@@ -119,14 +127,19 @@ if __name__ == "__main__":
         model_embeddings = model.resize_token_embeddings(len(tokenizer))
 
     elif args.model == "bert":
-        # Load the Bert Tokenizer, add any special token if needed
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased',  pad_token='<PAD>', sep_token='<SEP>')
         # Initialized the pre-trained BERT model
         pretrained_model = BertModel.from_pretrained('bert-base-uncased').to(DEVICE)
-
         # Initializing a model from the bert-base-uncased style configuration
         pretrained_model_embeddings = pretrained_model.resize_token_embeddings(len(tokenizer) + len(SPECIAL_TOKENS))
         model = BertBiranker(pretrained_model, seq_length=hyper_params['seq_len']).to(DEVICE)
+
+    elif args.model == "cross":
+        # Initialized the pre-trained BERT model
+        pretrained_model = BertModel.from_pretrained('bert-base-uncased').to(DEVICE)
+        # Initializing a model from the bert-base-uncased style configuration
+        pretrained_model_embeddings = pretrained_model.resize_token_embeddings(len(tokenizer) + len(SPECIAL_TOKENS))
+        model = CrossRanker(pretrained_model, hyper_params['seq_len'], hyper_params['batch_size']).to(DEVICE)
+
 
     optimizer = torch.optim.Adam(model.parameters(), lr=hyper_params['learning_rate'])
 

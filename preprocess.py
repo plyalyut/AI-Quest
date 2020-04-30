@@ -14,6 +14,8 @@ def load_dataset(train_file, test_file, batch_size, seq_len, special_tokens, tok
         total_dataset = GPTDataset(train_file, test_file, tokenizer, seq_len)
     elif model_type == "bert":
         total_dataset = BertDataset(train_file, test_file, tokenizer, seq_len)
+    elif model_type == "cross":
+        total_dataset = CrossDataset(train_file, test_file, tokenizer, seq_len, batch_size)
 
     # Builds data loaders
     if test_file != None:
@@ -22,10 +24,19 @@ def load_dataset(train_file, test_file, batch_size, seq_len, special_tokens, tok
         train_dataset = Subset(total_dataset, train_indices)
         test_dataset = Subset(total_dataset, test_indices)
     else:
-        split_size = int(len(total_dataset) * 0.9)
-        train_dataset, test_dataset = random_split(total_dataset, [split_size, len(total_dataset) - split_size])
+        if model_type != "cross":
+            split_size = int(len(total_dataset) * 0.9)
+            train_dataset, test_dataset = random_split(total_dataset, [split_size, len(total_dataset) - split_size])
+        else:
+            split_index = int((len(total_dataset) / batch_size) * 0.9) * batch_size
+            train_indices = list(range(0, split_index))
+            test_indices = list(range(split_index, len(total_dataset)))
+            train_dataset = Subset(total_dataset, train_indices)
+            test_dataset = Subset(total_dataset, test_indices)
 
-    train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+
+    shuffle_train = (model_type != "cross")
+    train_loader = DataLoader(train_dataset, batch_size, shuffle=shuffle_train)
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
     return train_loader, test_loader
 
@@ -298,94 +309,73 @@ class BertDataset(Dataset):
         return item
 
 
-# Converts data using a word2id dictionary
-class RawDataset(Dataset):
-    def __init__(self, train_file, test_file, seq_len, special_tokens):
+# Classification cross ranker.
+# As is currently works for just emotes. 
+class CrossDataset(Dataset):
+    def __init__(self, train_file, test_file, tokenizer, seq_len, batch_size, n_history = 3, p=0.1):
+        self.tokenizer = tokenizer
+        self.n_history = n_history
+        self.p = p
 
-        self.seq, self.lengths, self.masks = [], [], []
+        
+        self.seq = []
+        self.masks = []
+        self.labels = []
         self.max_seq_len = seq_len
-        self.word2id = {}
-        self.word2id["<|PAD|>"] = 0
-        self.vocab_size = 1
-        self.add_words(special_tokens)
+        self.batch_size = batch_size
+
+        self.emotes_strings = ["applaud", "blush", "cry", "dance", "frown", "gasp", "grin", "groan", "growl", "laugh", "nod", "nudge", "ponder", "pout", "scream", "shrug", "sigh", "smile", "stare", "wave", "wink", "yawn"]
+        self.emotes_ids = self.tokenizer.convert_tokens_to_ids(self.emotes_strings)
 
         self.convert_file(train_file)
         if test_file != None:
-            self.num_train_examples = len(self.lengths)
+            self.num_train_examples = len(self.labels)
             self.convert_file(test_file)
 
-        self.seq = pad_sequence(self.seq, batch_first=True, padding_value=0)
-
-    def add_words(self, sentence):
-        '''
-        Add words to the vocab.
-        :param sentence: the sentence to be encoded
-        '''
-        res = []
-        for word in sentence:
-            if not self.word2id.get(word):
-                self.word2id[word] = self.vocab_size
-                self.vocab_size = self.vocab_size + 1
-            res.append(self.word2id[word])
-        return res
-
     def convert_file(self, file_name):
-        '''
-        Reads in pickle file and extracts meaningful information.
-        '''
-
         with open(file_name, 'rb') as fp:
             data = pickle.load(fp)
+
+            # Randomly samples from the dataset
+            data = random_sample(data)
+
             for episode in data:
-                context, partner, self_character = convert_episode_context_to_data_point(episode)
+                context, partner, self_character = convert_episode_context_to_data_point(episode)   
                 num_responses = len(episode['character'])
                 previous_text = []
                 for i in range(1, num_responses):
-
-                    # objects for current call and response
-                    current_input = list(context)
-                    for obj in episode['room_objects'][i]:
-                        current_input += ['<|object_desc|>'] + (obj + " : " + episode['all_descriptions'][obj]).split()
-
-                    # previous text in conversation
-                    previous_text += get_previous_utterances(episode, i - 1, partner)
-                    current_input += previous_text
-
-                    speech_input = current_input + ['<|task_speech|>'] + episode['speech'][i].split()
-                    total_tokens = len(speech_input)
-                    self.seq.append(torch.tensor(self.add_words(speech_input)))
-                    self.lengths.append(total_tokens)
-                    ones = torch.ones(total_tokens)
-                    zeros = torch.zeros(self.max_seq_len - total_tokens)
-                    self.masks.append(torch.cat((ones, zeros)))
-
-                    second_persona_action = episode['action'][i]
                     second_persona_emote = episode['emote'][i]
-                    if second_persona_action is not None:
-                        action_input = current_input + ['<|task_action|>'] + second_persona_action.split()
-                        total_tokens = len(action_input)
-                        self.seq.append(torch.tensor(self.add_words(action_input)))
-                        self.lengths.append(total_tokens)
-                        ones = torch.ones(total_tokens)
-                        zeros = torch.zeros(self.max_seq_len - total_tokens)
-                        self.masks.append(torch.cat((ones, zeros)))
+                    previous_text += [get_previous_utterances(episode, i - 1, partner)]
 
                     if second_persona_emote is not None:
-                        emote_input = current_input + ['<|task_emote|>'] + second_persona_emote.split()
-                        total_tokens = len(emote_input)
-                        self.seq.append(torch.tensor(self.add_words(emote_input)))
-                        self.lengths.append(total_tokens)
-                        ones = torch.ones(total_tokens)
-                        zeros = torch.zeros(self.max_seq_len - total_tokens)
-                        self.masks.append(torch.cat((ones, zeros)))
+                        current_input = context
+                        for obj in episode['room_objects'][i]:
+                            current_input += '<|object_desc|> ' + obj + " : " + episode['all_descriptions'][obj]
+                        current_input += ' '.join(previous_text[max(0, len(previous_text)-self.n_history):])
+
+                        # Correct emote
+                        encoded = self.tokenizer.encode_plus(current_input + " <SEP> " + second_persona_emote, max_length=self.max_seq_len, pad_to_max_length=True)
+                        self.seq.append(torch.tensor(encoded['input_ids']))
+                        self.masks.append(torch.tensor(encoded['attention_mask']))
+                        self.labels.append(1)
+
+                        # Batch size minus one random emotes
+                        emote_random_sample = random.sample(self.emotes_strings, self.batch_size - 1)
+                        for e in emote_random_sample:
+                            encoded = self.tokenizer.encode_plus(current_input + " <SEP> " + e, max_length=self.max_seq_len, pad_to_max_length=True)
+                            self.seq.append(torch.tensor(encoded['input_ids']))
+                            self.masks.append(torch.tensor(encoded['attention_mask']))
+                            self.labels.append(0)
+                            
+
 
     def __len__(self):
-        return len(self.lengths)
+        return len(self.labels)
 
     def __getitem__(self, idx):
         item = {
             "seq": self.seq[idx],
-            "lengths": self.lengths[idx],
-            "mask": self.masks[idx]
+            "mask":  self.masks[idx],
+            "label": self.labels[idx]
         }
         return item
