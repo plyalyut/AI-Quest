@@ -9,8 +9,8 @@ from preprocess import *
 from tqdm import tqdm
 from BertBiranker import BertBiranker
 
-# DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#DEVICE = torch.device("cpu")
 
 hyper_params = {
      "batch_size": 2,

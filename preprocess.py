@@ -199,7 +199,7 @@ class BertDataset(Dataset):
 
         self.convert_file(train_file)
         if test_file != None:
-            self.num_train_examples = len(self.lengths)
+            self.num_train_examples = len(self.labels)
             self.convert_file(test_file)
 
 
