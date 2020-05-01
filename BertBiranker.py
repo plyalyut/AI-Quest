@@ -18,7 +18,7 @@ class BertBiranker(nn.Module):
 
         # Used for the representation of the ranking loss.
         self.embedding_layer = nn.Linear(hidden_size*seq_length, hidden_size)
-        self.loss_func = nn.HingeEmbeddingLoss(reduction='mean')
+        self.similarity = nn.CosineSimilarity()
 
 
     def forward(self, context, input, context_mask, input_mask, labels=None):
@@ -34,21 +34,23 @@ class BertBiranker(nn.Module):
         context = self.bert_model(context, attention_mask=context_mask)[0]
         context = context.view(context.shape[0],-1)
         context_embedding = self.embedding_layer(context)
-        softmax_context = F.softmax(context_embedding, dim=-1)
+        #softmax_context = F.softmax(context_embedding, dim=-1)
 
         input = self.bert_model(input, attention_mask=input_mask)[0]
         input = input.view(input.shape[0],-1)
         input_embedding = self.embedding_layer(input)
-        softmax_input = F.softmax(input_embedding, dim=-1)
+        #softmax_input = F.softmax(input_embedding, dim=-1)
 
         # Softmax and dot product?
-        similarity = torch.norm(softmax_context-softmax_input, p=2, dim=1)
+        #similarity = (context_embedding, input_embedding, labels)
+
+        return self.similarity(context_embedding, input_embedding)
 
         # TODO: Use a ranking loss to be maximized on random labels and minimized on correct labels
-        if labels != None:
-            return self.loss_func(similarity, labels), (context_embedding, input_embedding)
-        else:
-            return (context_embedding, input_embedding)
+        #if labels != None:
+        #    return self.loss_func(similarity, labels), (context_embedding, input_embedding)
+        #else:
+        #    return (context_embedding, input_embedding)
 
 
 

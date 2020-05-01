@@ -14,9 +14,9 @@ from CrossRanker import CrossRanker
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 hyper_params = {
-     "batch_size": 5,
+     "batch_size": 3,
      "num_epochs": 3,
-     "learning_rate": 0.001, 
+     "learning_rate": 0.0001,
      'seq_len': 512 #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround
  }
 
@@ -30,8 +30,9 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
     """
     # TODO: Write the training loop here, save trained model weights if needed
     model = model.train()
-    if model_type == "cross":
+    if model_type == "cross" or model_type == "bert":
         loss_func = nn.MSELoss(reduction='sum')
+
     with experiment.train():
         for i in range(hyper_params['num_epochs']):
             for data in tqdm(train_loader):
@@ -47,7 +48,9 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     input_text = data['input'].to(DEVICE)
                     input_mask = data['input_mask'].to(DEVICE)
                     labels = data['label'].to(DEVICE)
-                    loss, (context_embedding, input_embedding) = model(context, input_text, context_mask, input_mask, labels=labels)
+                    similarity = model(context, input_text, context_mask, input_mask)
+                    loss = loss_func(similarity.float(), labels.float())
+                    #loss = loss_func(prediction.float(), labels.float())
                 elif model_type == "cross":
                     input = data['seq'].long().to(DEVICE)
                     masks = data['mask'].long().to(DEVICE)
