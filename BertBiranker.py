@@ -31,20 +31,21 @@ class BertBiranker(nn.Module):
         '''
 
         # TODO: incorporate masks in each forward pass
-        context = self.bert_model(context, attention_mask=context_mask)[0]
+        #context = self.bert_model(context, attention_mask=context_mask)[0]
+        context = self.bert_model(context)[0]
         context = context.view(context.shape[0],-1)
-        context_embedding = self.embedding_layer(context)
-        #softmax_context = F.softmax(context_embedding, dim=-1)
+        context = self.embedding_layer(context)
 
-        input = self.bert_model(input, attention_mask=input_mask)[0]
+        #input = self.bert_model(input, attention_mask=input_mask)[0]
+        input = self.bert_model(input)[0]
         input = input.view(input.shape[0],-1)
-        input_embedding = self.embedding_layer(input)
-        #softmax_input = F.softmax(input_embedding, dim=-1)
+        input = self.embedding_layer(input)
+
+        return context, input
 
         # Softmax and dot product?
-        #similarity = (context_embedding, input_embedding, labels)
 
-        return self.similarity(context_embedding, input_embedding)
+        #return self.similarity(context_embedding, input_embedding)
 
         # TODO: Use a ranking loss to be maximized on random labels and minimized on correct labels
         #if labels != None:

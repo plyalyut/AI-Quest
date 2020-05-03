@@ -16,8 +16,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 hyper_params = {
      "batch_size": 3,
      "num_epochs": 3,
-     "learning_rate": 0.0001,
-     'seq_len': 512 #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround
+     "learning_rate": 0,
+     'seq_len': 512, #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround,
+     'accumulation_steps': 10
  }
 
 def train_model(model, train_loader, optimizer, experiment, model_type):
@@ -35,8 +36,10 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
 
     with experiment.train():
         for i in range(hyper_params['num_epochs']):
+            optimizer.zero_grad()
+            train_count = 0
             for data in tqdm(train_loader):
-                optimizer.zero_grad()
+                train_count += 1
                 if model_type == "gpt2":
                     input = data['seq'].long().to(DEVICE)
                     lengths = data['lengths'].long().to(DEVICE)
@@ -48,17 +51,20 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     input_text = data['input'].to(DEVICE)
                     input_mask = data['input_mask'].to(DEVICE)
                     labels = data['label'].to(DEVICE)
-                    similarity = model(context, input_text, context_mask, input_mask)
-                    loss = loss_func(similarity.float(), labels.float())
-                    #loss = loss_func(prediction.float(), labels.float())
+                    context_embed, input_embed = model(context, input_text, context_mask, input_mask)
+                    #loss = loss_func(similarity.float(), labels.float())
+                    loss = nn.CosineEmbeddingLoss()(context_embed, input_embed, labels)
                 elif model_type == "cross":
                     input = data['seq'].long().to(DEVICE)
                     masks = data['mask'].long().to(DEVICE)
                     labels = data['label'].to(DEVICE)
                     prediction = model(input, masks)
                     loss = loss_func(prediction.float(), labels.float())
+                loss = loss/hyper_params['accumulation_steps']
                 loss.backward()  # calculate gradients
-                optimizer.step()  # update model weights
+                if train_count % hyper_params['accumulation_steps'] == 0:
+                    optimizer.step()  # update model weights
+                    optimizer.zero_grad()
 
 
 def test_model(model, test_loader, experiment):
