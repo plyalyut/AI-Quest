@@ -321,6 +321,7 @@ class CrossDataset(Dataset):
         self.seq = []
         self.masks = []
         self.labels = []
+        self.position_ids = []
         self.max_seq_len = seq_len
         self.batch_size = batch_size
 
@@ -352,12 +353,16 @@ class CrossDataset(Dataset):
                         for obj in episode['room_objects'][i]:
                             current_input += '<|object_desc|> ' + obj + " : " + episode['all_descriptions'][obj]
                         current_input += ' '.join(previous_text[max(0, len(previous_text)-self.n_history):])
+                        num_context_tokens = len(current_input.split())
 
                         # Correct emote
-                        encoded = self.tokenizer.encode_plus(current_input + " <SEP> " + second_persona_emote, max_length=self.max_seq_len, pad_to_max_length=True)
+                        encoded = self.tokenizer.encode_plus(current_input + second_persona_emote, max_length=self.max_seq_len, pad_to_max_length=True)
                         self.seq.append(torch.tensor(encoded['input_ids']))
                         self.masks.append(torch.tensor(encoded['attention_mask']))
-                        self.labels.append(1)
+                        self.labels.append(0)
+                        zeros = torch.zeros(max(self.max_seq_len, num_context_tokens))
+                        ones = torch.ones(min(0, self.max_seq_len - num_context_tokens))
+                        self.position_ids.append(torch.cat((zeros, ones)))
 
                         # Batch size minus one random emotes
                         emote_random_sample = random.sample(self.emotes_strings, self.batch_size - 1)
@@ -365,7 +370,10 @@ class CrossDataset(Dataset):
                             encoded = self.tokenizer.encode_plus(current_input + " <SEP> " + e, max_length=self.max_seq_len, pad_to_max_length=True)
                             self.seq.append(torch.tensor(encoded['input_ids']))
                             self.masks.append(torch.tensor(encoded['attention_mask']))
-                            self.labels.append(0)
+                            self.labels.append(1)
+                            zeros = torch.zeros(max(self.max_seq_len, num_context_tokens))
+                            ones = torch.ones(min(0, self.max_seq_len - num_context_tokens))
+                            self.position_ids.append(torch.cat((zeros, ones)))
                             
 
 
@@ -376,6 +384,7 @@ class CrossDataset(Dataset):
         item = {
             "seq": self.seq[idx],
             "mask":  self.masks[idx],
+            "position_ids":  self.position_ids[idx],
             "label": self.labels[idx]
         }
         return item

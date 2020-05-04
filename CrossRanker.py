@@ -13,20 +13,16 @@ class CrossRanker(nn.Module):
         self.embedding_layer = nn.Linear(hidden_size*seq_length, hidden_size)
 
 
-    def forward(self, seq, masks):
-        '''
-        Computes the distance between the norm between the embeddings.
-        The context embedding and the input embeddings.
-        :param context: context of the character as well as previous conversation history
-        :param input: input from the character
-        :return: loss, embeddings
-        '''
+    def forward(self, seq, masks, type_ids, labels=None):
 
         # TODO: incorporate masks in each forward pass
-        context = self.bert_model(seq, attention_mask=masks)[0]
-        context = context.view(seq.shape[0],-1)
-        context_embedding = self.embedding_layer(context)
-        return F.softmax(context_embedding, dim=0, dtype=torch.float32)[:, -1]
+        if labels != None:
+            loss, out = self.bert_model(seq, attention_mask=masks, token_type_ids=type_ids, next_sentence_label=labels)[:2]
+            print(out)
+            return loss, out
+        else:
+            return self.bert_model(seq, attention_mask=masks, token_type_ids=type_ids)[0]
+
 
         
 

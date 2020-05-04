@@ -15,8 +15,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 hyper_params = {
      "batch_size": 3,
-     "num_epochs": 3,
-     "learning_rate": 0,
+     "num_epochs": 2,
+     "learning_rate": 0.001,
      'seq_len': 512, #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround,
      'accumulation_steps': 10
  }
@@ -31,7 +31,7 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
     """
     # TODO: Write the training loop here, save trained model weights if needed
     model = model.train()
-    if model_type == "cross" or model_type == "bert":
+    if model_type == "bert":
         loss_func = nn.MSELoss(reduction='sum')
 
     with experiment.train():
@@ -44,7 +44,7 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     input = data['seq'].long().to(DEVICE)
                     lengths = data['lengths'].long().to(DEVICE)
                     masks = data['mask'].to(DEVICE)
-                    loss = model(input, labels = input, attention_mask=masks)[0]
+                    loss = model(input, labels=input, attention_mask=masks)[0]
                 elif model_type == "bert":
                     context = data['context'].to(DEVICE)
                     context_mask = data['context_mask'].to(DEVICE)
@@ -57,9 +57,10 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                 elif model_type == "cross":
                     input = data['seq'].long().to(DEVICE)
                     masks = data['mask'].long().to(DEVICE)
+                    position_ids = data['position_ids'].to(DEVICE)
                     labels = data['label'].to(DEVICE)
-                    prediction = model(input, masks)
-                    loss = loss_func(prediction.float(), labels.float())
+                    loss, prediction = model(input, masks, position_ids, labels=labels)
+                    # loss = loss_func(prediction.float(), labels.float())
                 loss = loss/hyper_params['accumulation_steps']
                 loss.backward()  # calculate gradients
                 if train_count % hyper_params['accumulation_steps'] == 0:
@@ -67,7 +68,7 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                     optimizer.zero_grad()
 
 
-def test_model(model, test_loader, experiment):
+def test_model(model, test_loader, experiment, model_type):
     """
     Tests the model using the testing dataset, evaluates the perplexity.
     :param model: the initilized model to use for forward pass
@@ -76,7 +77,46 @@ def test_model(model, test_loader, experiment):
     :param experiment: comet.ml experiment object
     """
 
-    pass
+    model = model.eval()
+    total_correct = 0.0
+    total_predicted = 0
+    total_loss = 0.0
+    word_count = 0
+    with experiment.validate():
+        for data in tqdm(test_loader):
+                if model_type == "cross":
+                    input = data['seq'].long().to(DEVICE)
+                    masks = data['mask'].long().to(DEVICE)
+                    position_ids = data['position_ids'].to(DEVICE)
+                    labels = data['label'].to(DEVICE)
+                    loss, prediction = model(input, masks, position_ids, labels=labels)
+                    print(prediction)
+                    correct = (torch.argmax(prediction) == torch.argmax(labels))
+                    total_correct = total_correct + correct.sum().item()
+                    total_predicted = total_predicted + 1
+                elif model_type == "gpt2":
+                    x = data["seq"].to(DEVICE)
+                    masks = data['mask'].to(DEVICE)
+                    lengths = data["lengths"].to(DEVICE)
+                    outputs = model(x, labels=x, attention_mask=masks)
+                    loss, logits = outputs[:2]
+                    prediction = torch.argmax(logits, dim=-1)
+                    total_correct += torch.sum(x.flatten() == prediction.flatten())
+                    total_predicted += (torch.sum(masks.flatten()))
+                    num_words = torch.sum(lengths)
+                    total_loss = total_loss + (loss.item() * num_words.item())
+                    word_count = word_count + num_words.item()
+    
+    if model_type == "gpt2":
+        loss_per_word = total_loss / word_count
+        perplexity = torch.exp(torch.tensor(loss_per_word))
+        print("perplexity:", perplexity.item())
+        experiment.log_metric("perplexity", perplexity.item())
+    
+    accuracy = total_correct / total_predicted
+    print("accuracy: ", accuracy.item())
+    experiment.log_metric("accuracy", accuracy.item())
+
 
 def interactive():
     '''TODO'''
@@ -98,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--interactive", action="store_true",
                         help="run in interactive mode")
     parser.add_argument("-m", "--model", type=str, default="",
-    help="gpt2 or bert")
+    help="gpt2 or bert or cross")
     args = parser.parse_args()
 
     experiment = Experiment(log_code=False)
@@ -122,7 +162,7 @@ if __name__ == "__main__":
     if args.train_file == None and args.test_file == None:
         print("loading saved data loaders...")
         train_loader = torch.load('./train_loader.pt')
-        # test_loader = torch.load('./test_loader.pt')
+        test_loader = torch.load('./test_loader.pt')
 
     else:
         train_loader, test_loader = load_dataset(args.train_file, args.test_file, hyper_params['batch_size'], hyper_params['seq_len'], SPECIAL_TOKENS, tokenizer, args.model) 
@@ -144,7 +184,7 @@ if __name__ == "__main__":
 
     elif args.model == "cross":
         # Initialized the pre-trained BERT model
-        pretrained_model = BertModel.from_pretrained('bert-base-uncased').to(DEVICE)
+        pretrained_model = BertForNextSentencePrediction.from_pretrained('bert-base-uncased').to(DEVICE)
         # Initializing a model from the bert-base-uncased style configuration
         pretrained_model_embeddings = pretrained_model.resize_token_embeddings(len(tokenizer) + len(SPECIAL_TOKENS))
         model = CrossRanker(pretrained_model, hyper_params['seq_len'], hyper_params['batch_size']).to(DEVICE)
@@ -163,7 +203,7 @@ if __name__ == "__main__":
         torch.save(model.state_dict(), './model.pt')
     if args.test:
         print("running testing loop...")
-        test_model(model, test_loader, experiment)
+        test_model(model, test_loader, experiment, args.model)
 
 
     if args.interactive:
