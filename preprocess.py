@@ -360,8 +360,8 @@ class CrossDataset(Dataset):
                         self.seq.append(torch.tensor(encoded['input_ids']))
                         self.masks.append(torch.tensor(encoded['attention_mask']))
                         self.labels.append(0)
-                        zeros = torch.zeros(max(self.max_seq_len, num_context_tokens))
-                        ones = torch.ones(min(0, self.max_seq_len - num_context_tokens))
+                        zeros = torch.zeros(min(self.max_seq_len, num_context_tokens))
+                        ones = torch.ones(max(0, self.max_seq_len - num_context_tokens))
                         self.position_ids.append(torch.cat((zeros, ones)))
 
                         # Batch size minus one random emotes
@@ -371,8 +371,8 @@ class CrossDataset(Dataset):
                             self.seq.append(torch.tensor(encoded['input_ids']))
                             self.masks.append(torch.tensor(encoded['attention_mask']))
                             self.labels.append(1)
-                            zeros = torch.zeros(max(self.max_seq_len, num_context_tokens))
-                            ones = torch.ones(min(0, self.max_seq_len - num_context_tokens))
+                            zeros = torch.zeros(min(self.max_seq_len, num_context_tokens))
+                            ones = torch.ones(max(0, self.max_seq_len - num_context_tokens))
                             self.position_ids.append(torch.cat((zeros, ones)))
                             
 

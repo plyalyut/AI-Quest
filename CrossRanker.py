@@ -18,10 +18,10 @@ class CrossRanker(nn.Module):
         # TODO: incorporate masks in each forward pass
         if labels != None:
             loss, out = self.bert_model(seq, attention_mask=masks, token_type_ids=type_ids, next_sentence_label=labels)[:2]
-            print(out)
-            return loss, out
+            return loss, F.softmax(out[:, 1], dim=0)
         else:
-            return self.bert_model(seq, attention_mask=masks, token_type_ids=type_ids)[0]
+            out = self.bert_model(seq, attention_mask=masks, token_type_ids=type_ids)[0]
+            return F.softmax(out[:, 1], dim=0)
 
 
         

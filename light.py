@@ -57,8 +57,8 @@ def train_model(model, train_loader, optimizer, experiment, model_type):
                 elif model_type == "cross":
                     input = data['seq'].long().to(DEVICE)
                     masks = data['mask'].long().to(DEVICE)
-                    position_ids = data['position_ids'].to(DEVICE)
-                    labels = data['label'].to(DEVICE)
+                    position_ids = data["position_ids"].long().to(DEVICE)
+                    labels = data['label'].long().to(DEVICE)
                     loss, prediction = model(input, masks, position_ids, labels=labels)
                     # loss = loss_func(prediction.float(), labels.float())
                 loss = loss/hyper_params['accumulation_steps']
@@ -87,12 +87,11 @@ def test_model(model, test_loader, experiment, model_type):
                 if model_type == "cross":
                     input = data['seq'].long().to(DEVICE)
                     masks = data['mask'].long().to(DEVICE)
-                    position_ids = data['position_ids'].to(DEVICE)
-                    labels = data['label'].to(DEVICE)
+                    position_ids = data['position_ids'].long().to(DEVICE)
+                    labels = data['label'].long().to(DEVICE)
                     loss, prediction = model(input, masks, position_ids, labels=labels)
-                    print(prediction)
-                    correct = (torch.argmax(prediction) == torch.argmax(labels))
-                    total_correct = total_correct + correct.sum().item()
+                    correct = (torch.argmax(prediction) == torch.argmin(labels))
+                    total_correct = total_correct + correct
                     total_predicted = total_predicted + 1
                 elif model_type == "gpt2":
                     x = data["seq"].to(DEVICE)
