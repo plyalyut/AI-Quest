@@ -1,4 +1,0 @@
-GPT2 Train: https://www.comet.ml/40ebcd02/light/6b262d7ea106476a85a80ca8a97324b6
-GPT2 Test: https://www.comet.ml/40ebcd02/light/842de88cbbd44b5d93f06d2723a3d4df
-Cross Train: https://www.comet.ml/40ebcd02/light/69b99549acd74f35a215e07393793e71
-Cross Test: https://www.comet.ml/40ebcd02/light/376cbdc06e194f91a4f2c27a20300865

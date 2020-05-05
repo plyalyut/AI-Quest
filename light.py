@@ -17,7 +17,7 @@ hyper_params = {
      "batch_size": 3,
      "num_epochs": 2,
      "learning_rate": 0.001,
-     'seq_len': 512, #Actual sequence length is 1201. But model crashes when this large. Need to determine a workaround,
+     'seq_len': 512,
      'accumulation_steps': 10
  }
 
@@ -115,11 +115,6 @@ def test_model(model, test_loader, experiment, model_type):
     accuracy = total_correct / total_predicted
     print("accuracy: ", accuracy.item())
     experiment.log_metric("accuracy", accuracy.item())
-
-
-def interactive():
-    '''TODO'''
-    pass 
 
 
 if __name__ == "__main__":
