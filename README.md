@@ -11,8 +11,10 @@ Fantasy text adventure games have been primarily hardcoded for a fixed set of ac
 * [Huggingface Transformers Library](https://github.com/huggingface/transformers)
 
 ## Installation Steps and Data Formatting
-1) Run
-  python examples/eval_model.py -t light_dialog -mf models:light/biranker_dialogue/model
+1. Run the following command inside the ParlAI directory to download the LIGHT model.
+'''python examples/eval_model.py -t light_dialog -mf models:light/biranker_dialogue/model'''
+2. Locate the data used for the LIGHT training and testing.
+3. 
 
 
 Using BERT and GPT2 to model an agent in a text based fantasy adventure game.
