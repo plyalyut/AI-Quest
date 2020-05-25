@@ -1,8 +1,3 @@
-# AI-Quest
-
-## Overview
-
-Fantasy text adventure games have been primarily hardcoded for a fixed set of action. We developed a text adventure game that uses deep learning NLP architectures like GPT2 and BERT to generate an infinite set of playable fantasy worlds. The course of the game changes based on the players responses.
 
 ## Prerequisites
 
